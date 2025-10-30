@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Justin Stephens</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the dark/tech theme and parallax */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Dark background */
+            color: #c9d1d9; /* Light text */
+            scroll-behavior: smooth;
+        }
+
+        /* Container for the avatar to hold the glow effect */
+        .avatar-container {
+            position: relative;
+            display: inline-block;
+            overflow: hidden;
+            border-radius: 9999px; /* Fully rounded */
+            box-shadow: 0 0 15px rgba(0, 150, 255, 0.5); /* Subtle initial blue glow */
+            transition: box-shadow 0.3s ease-in-out;
+        }
+
+        .avatar-container:hover {
+            box-shadow: 0 0 30px rgba(0, 200, 255, 0.8), 0 0 50px rgba(0, 100, 255, 0.5); /* Enhanced hover glow */
+        }
+        
+        /* The Parallax Section (Header) */
+        .parallax-header {
+            background-image: url('https://placehold.co/1920x600/1e293b/a5b4fc?text=DATASTREAM+INTERFACE');
+            background-attachment: fixed;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            height: 40vh; /* Responsive height */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .parallax-overlay {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Fancy list items animation */
+        .animated-list-item {
+            transition: transform 0.2s ease-in-out, background-color 0.2s;
+            cursor: default;
+        }
+        .animated-list-item:hover {
+            transform: translateX(5px);
+            background-color: #1a232f; /* Darker hover background */
+            box-shadow: 0 2px 5px rgba(0, 150, 255, 0.2);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Parallax Header Section -->
+    <header class="parallax-header">
+        <div class="parallax-overlay">
+            <h1 class="text-4xl sm:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 tracking-wider animate-pulse">
+                JUSTIN STEPHENS: PROFILE
+            </h1>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-4 sm:p-8 space-y-12">
+        
+        <!-- About Me Section -->
+        <section class="bg-gray-800/50 p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-700/50 transition-shadow hover:shadow-blue-500/30">
+            <h2 class="text-3xl font-bold mb-6 border-b border-blue-500/50 pb-2 text-blue-300">
+                A Little Bit About Me
+            </h2>
+            
+            <ul class="space-y-4">
+                <!-- List Item 1: Location -->
+                <li class="bg-gray-700/30 p-4 rounded-lg animated-list-item flex items-start">
+                    <span class="text-blue-400 mr-3 text-xl">&#10003;</span>
+                    <p>I was born in Southern California, but I claim <strong class="text-cyan-300">Arizona</strong> as my home, since I moved there in middle school.</p>
+                </li>
+
+                <!-- List Item 2: Nerd Persona -->
+                <li class="bg-gray-700/30 p-4 rounded-lg animated-list-item">
+                    <div class="flex items-start mb-2">
+                        <span class="text-blue-400 mr-3 text-xl">&#10003;</span>
+                        <p class="font-semibold text-lg text-blue-200">I am a stereotypical nerd in most ways you can think of:</p>
+                    </div>
+                    <ul class="ml-8 space-y-3 border-l-2 border-dashed border-gray-600 pl-4">
+                        <li class="flex items-center text-sm">
+                            <span class="text-green-400 mr-2">&bull;</span>
+                            <span class="text-gray-300">I love <strong class="text-white">role-playing and strategy games</strong>, regardless of format: Board Games, Video Games, or Pen and paper like Dungeons and Dragons.</span>
+                        </li>
+                        <li class="flex items-center text-sm">
+                            <span class="text-green-400 mr-2">&bull;</span>
+                            <span class="text-gray-300">I enjoy <strong class="text-white">science fiction and fantasy</strong>, also regardless of format: TV shows, movies, graphic novels and books.</span>
+                        </li>
+                        <li class="flex items-center text-sm">
+                            <span class="text-green-400 mr-2">&bull;</span>
+                            <span class="text-gray-300">I have a dual major in <strong class="text-white">computer science and math</strong>, and my job is overseeing a large software project.</span>
+                        </li>
+                    </ul>
+                </li>
+
+                <!-- List Item 3: Differences -->
+                <li class="bg-gray-700/30 p-4 rounded-lg animated-list-item">
+                    <div class="flex items-start mb-2">
+                        <span class="text-blue-400 mr-3 text-xl">&#10003;</span>
+                        <p class="font-semibold text-lg text-blue-200">However, there are a couple of ways I differ from the stereotype:</p>
+                    </div>
+                    <ol class="ml-8 space-y-3 list-decimal list-inside text-sm text-gray-300 border-l-2 border-dashed border-gray-600 pl-4">
+                        <li>I love the <strong class="text-white">outdoors</strong>, specifically: hiking, camping, and skiing (both water and snow).</li>
+                        <li>I also like to <strong class="text-white">cook</strong> and I am the designated cook for our household.</li>
+                    </ol> 
+                </li>
+            </ul>
+        </section>
+
+        <!-- Avatar Story Section -->
+        <section class="bg-gray-800/50 p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-700/50 transition-shadow hover:shadow-blue-500/30">
+            <h2 class="text-3xl font-bold mb-6 border-b border-blue-500/50 pb-2 text-blue-300">
+                The Story Behind My Avatar Image: Griphonne IV
+            </h2>
+
+            <div class="flex flex-col md:flex-row items-center md:space-x-8">
+                <!-- Image Container with Glow Effect -->
+                <div class="flex-shrink-0 mb-6 md:mb-0">
+                    <div class="avatar-container">
+                        <img src="GriphonneIV.jpg" alt="Avatar Image" class="w-48 h-48 object-cover rounded-full border-4 border-blue-600/50">
+                    </div>
+                </div>
+                
+                <!-- Text Content -->
+                <div class="text-lg leading-relaxed">
+                    <p class="mb-4">
+                        I often use the image above as my avatar on various websites and forums. It is the symbol of <strong class="text-red-400">Griphonne IV</strong>, a planet in the Warhammer 40K universe.
+                    </p>
+                    <p class="mb-4">
+                        It was one of the most powerful forgeworlds of the Imperium of Man, but it was devoured by the Tyranids because the planet thought its defenses could withstand any invasion, but they were wrong.
+                    </p>
+                    <p>
+                        You can read the full story of Griphonne IV 
+                        <a href="https://warhammer40k.fandom.com/wiki/Griphonne_IV" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline font-medium transition duration-300">here</a>.
+                    </p>
+                    <p class="mt-4 p-3 border-l-4 border-blue-500 bg-gray-700/30 italic text-sm">
+                        I use this image to remind myself to <strong class="text-blue-300">not be overconfident and always be prepared for the unexpected</strong>.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+    
+    <!-- Footer -->
+    <footer class="mt-12 p-4 text-center text-gray-500 text-sm border-t border-gray-700/50">
+        <p>System Log Complete. Profile Interface Rendered. | Designed with Tailwind CSS</p>
+    </footer>
+    
+</body>
+</html>
