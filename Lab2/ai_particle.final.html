@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Fireworks Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for canvas and body */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars due to full screen canvas */
+        }
+        #fireworksCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        .controls-container {
+            z-index: 20;
+            position: relative;
+            background-color: rgba(17, 24, 39, 0.8); /* Dark background with transparency */
+            backdrop-filter: blur(5px);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fcd34d;
+            cursor: pointer;
+            box-shadow: 0 0 5px #fcd34d;
+        }
+        /* Mobile layout adjustment */
+        @media (max-width: 768px) {
+            .controls-container {
+                padding: 10px;
+                flex-direction: column;
+            }
+            .control-group {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+    <canvas id="fireworksCanvas"></canvas>
+
+    <div class="controls-container p-4 flex justify-center items-center gap-4 rounded-b-xl shadow-2xl mx-auto max-w-5xl">
+        
+        <!-- Firework Type Selector -->
+        <div class="control-group flex flex-col items-center">
+            <label for="fireworkType" class="text-sm font-semibold mb-1 text-yellow-300">Style</label>
+            <select id="fireworkType" class="p-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:ring-yellow-500 focus:border-yellow-500 transition duration-150 ease-in-out">
+                <option value="rocket">Rocket Burst</option>
+                <option value="fountain">Ground Fountain</option>
+            </select>
+        </div>
+
+        <!-- Spawn Rate Control (Normalized 1-100) -->
+        <div class="control-group flex flex-col items-center w-1/5 max-w-xs">
+            <label for="spawnRate" class="text-sm font-semibold mb-2 text-yellow-300">Spawn Rate (<span id="rateValue">50</span>)</label>
+            <input type="range" id="spawnRate" min="1" max="100" value="50" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+        </div>
+
+        <!-- Explosion Size/Density Control (Normalized 1-100) -->
+        <div class="control-group flex flex-col items-center w-1/5 max-w-xs">
+            <label for="explosionSize" class="text-sm font-semibold mb-2 text-yellow-300">Size/Density (<span id="sizeValue">50</span>)</label>
+            <input type="range" id="explosionSize" min="1" max="100" value="50" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+        </div>
+        
+        <!-- Velocity Control (Normalized 1-100) -->
+        <div class="control-group flex flex-col items-center w-1/5 max-w-xs">
+            <label for="velocityControl" class="text-sm font-semibold mb-2 text-yellow-300">Velocity (<span id="velocityValue">50</span>)</label>
+            <input type="range" id="velocityControl" min="1" max="100" step="1" value="50" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+        </div>
+
+        <!-- Wind Control -->
+        <div class="control-group flex flex-col items-center w-1/5 max-w-xs">
+            <label for="windControl" class="text-sm font-semibold mb-2 text-yellow-300">Wind (<span id="windDisplay">0.00</span>)</label>
+            <input type="range" id="windControl" min="-0.2" max="0.2" step="0.01" value="0.0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+        </div>
+
+        <!-- Start/Stop Button -->
+        <div class="control-group flex flex-col items-center justify-end">
+            <button id="toggleRunButton" class="px-4 py-2 mt-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-lg transition duration-150 ease-in-out">
+                Stop
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Global environment variables
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        const gravity = 0.05; // Force of gravity
+        let particles = [];
+        let rockets = [];
+        let lastSpawnTime = 0;
+
+        // UI Control Variables (Normalized 1-100)
+        let fireworkType = 'rocket'; 
+        let spawnRateNorm = 50; 
+        let explosionSizeNorm = 50; 
+        let velocityNorm = 50; 
+        let windForce = 0.0; 
+        let isRunning = true; 
+
+        // --- Utility Functions ---
+
+        function HSLToCSS(h, s, l) {
+            return `hsl(${h}, ${s}%, ${l}%)`;
+        }
+
+        function setupCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', setupCanvas);
+
+        // --- Particle Class ---
+
+        class Particle {
+            constructor(x, y, vx, vy, hue, life, size, isRocket = false) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.hue = hue;
+                this.alpha = 1;
+                this.life = life || (Math.random() * 100) + 100;
+                this.remainingLife = this.life;
+                this.size = size || 3;
+                this.isRocket = isRocket;
+                this.history = []; 
+            }
+
+            update() {
+                this.remainingLife--;
+
+                // Apply forces
+                this.vy += gravity;
+                this.vx += windForce;
+                
+                // Apply drag (air resistance)
+                this.vx *= 0.995;
+                this.vy *= 0.995;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                this.alpha = this.remainingLife / this.life;
+
+                if (this.isRocket) {
+                    this.history.push({ x: this.x, y: this.y });
+                    if (this.history.length > 5) {
+                        this.history.shift(); 
+                    }
+                }
+            }
+
+            draw() {
+                const color = HSLToCSS(this.hue, 100, 50);
+
+                // Draw main particle
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * this.alpha, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.fill();
+
+                // Draw the fading color glow
+                ctx.save();
+                ctx.globalAlpha = this.alpha * 0.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 2, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.restore();
+
+                // Draw the rocket trail
+                if (this.isRocket && this.history.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.history[0].x, this.history[0].y);
+                    for (let i = 1; i < this.history.length; i++) {
+                        ctx.lineTo(this.history[i].x, this.history[i].y);
+                    }
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // --- Normalization Functions ---
+
+        /**
+         * Maps normalized 1-100 spawn rate to the actual time delay needed.
+         */
+        function getSpawnDelay() {
+            if (fireworkType === 'rocket') {
+                // Rocket: 1 (Slowest) -> 1000ms delay. 100 (Fastest) -> 100ms delay.
+                return 1000 - (spawnRateNorm * 9); 
+            } else {
+                // Fountain: 1 (Sparse) -> 50ms delay. 100 (Dense/Continuous) -> 5ms delay.
+                return 50 - (spawnRateNorm * 0.45); 
+            }
+        }
+
+        /**
+         * Maps normalized 1-100 velocity to a multiplier (0.5x to 3.0x).
+         */
+        function getVelocityMultiplier() {
+            // Normalized value: 1 -> 0.5, 100 -> 3.0
+            return 0.5 + (velocityNorm * 0.025); 
+        }
+
+        /**
+         * Maps normalized 1-100 size to the particle count/density.
+         */
+        function getParticleCount() {
+            if (fireworkType === 'rocket') {
+                // Rocket: 1 (Small) -> 20 particles. 100 (Large) -> 300 particles.
+                return 20 + (explosionSizeNorm * 2.8);
+            } else {
+                // Fountain: 1 (Sparse) -> 1 particle/frame. 100 (Dense) -> 10 particles/frame.
+                // We use Math.max(1) to ensure the fountain is always visible.
+                return Math.max(1, Math.round(explosionSizeNorm / 10)); 
+            }
+        }
+
+        // --- Firework Logic ---
+
+        /**
+         * Creates a single rocket that shoots up and explodes.
+         */
+        function launchRocket() {
+            const velMult = getVelocityMultiplier();
+            const startX = width / 2 + (Math.random() - 0.5) * 100;
+            const startY = height;
+            
+            // ADJUSTED: Dampening factor for rocket launch speed. Lowered to 0.3 to further reduce 
+            // initial launch velocity and keep rockets comfortably on screen.
+            const rocketDampen = 0.3; 
+            
+            // Vertical velocity scaled by normalized velocity and the dampening factor
+            const startVY = -(Math.random() * 5 + 8) * velMult * rocketDampen; 
+            
+            // Horizontal velocity (launch angle variability) is also dampened
+            const startVX = (Math.random() - 0.5) * 4 * velMult * rocketDampen; 
+
+            const hue = Math.floor(Math.random() * 360);
+            const rocket = new Particle(startX, startY, startVX, startVY, hue, 1000, 4, true);
+
+            rockets.push({
+                particle: rocket,
+                exploded: false,
+                explosionHue: hue,
+                explosionSize: getParticleCount() // Use actual particle count here
+            });
+        }
+
+        /**
+         * Explodes a single rocket into many sparks.
+         */
+        function explodeRocket(rocket) {
+            rocket.exploded = true;
+            const numParticles = rocket.explosionSize;
+            const hue = rocket.explosionHue;
+            const velMult = getVelocityMultiplier();
+            
+            // Explosion power is scaled by velocityMultiplier
+            const explosionPower = 3 * velMult; 
+
+            for (let i = 0; i < numParticles; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * explosionPower + 0.5; // Minimum speed is 0.5
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+                const life = (Math.random() * 50) + 150;
+                const size = Math.random() * 2 + 1;
+
+                particles.push(new Particle(
+                    rocket.particle.x,
+                    rocket.particle.y,
+                    vx,
+                    vy,
+                    hue + (Math.random() * 40 - 20),
+                    life,
+                    size,
+                    false
+                ));
+            }
+        }
+
+        /**
+         * Creates a ground-based fountain effect.
+         */
+        function spawnFountainParticles() {
+            const numParticles = getParticleCount(); // Use normalized density here
+            const velMult = getVelocityMultiplier();
+            const startX = width / 2;
+            const startY = height;
+            const hue = Math.floor(Math.random() * 360);
+
+            for (let i = 0; i < numParticles; i++) {
+                // Vertical velocity needs a higher baseline for the fountain to be visible
+                const baseVY = 4 + (explosionSizeNorm * 0.05); // Height is slightly controlled by density
+                const startVY = -(Math.random() * 3 + baseVY) * velMult * 0.5; // Dampen velocity for fountain
+                
+                // Horizontal variation for fountain particles
+                const startVX = (Math.random() - 0.5) * 2 * velMult; 
+                const life = (Math.random() * 50) + 70; 
+                const size = Math.random() * 1.5 + 0.5;
+
+                particles.push(new Particle(
+                    startX + (Math.random() - 0.5) * 10, 
+                    startY,
+                    startVX,
+                    startVY,
+                    hue,
+                    life,
+                    size,
+                    false
+                ));
+            }
+        }
+
+
+        // --- Main Animation Loop ---
+
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            if (!isRunning) {
+                return; 
+            }
+
+            // 1. Clear the canvas (with slight fade for trail effect)
+            ctx.fillStyle = 'rgba(10, 10, 20, 0.1)'; 
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. Handle Spawning (Using the dynamically calculated delay)
+            const timeDelay = getSpawnDelay();
+            if (currentTime - lastSpawnTime > timeDelay) {
+                if (fireworkType === 'rocket') {
+                    launchRocket();
+                } else if (fireworkType === 'fountain') {
+                    spawnFountainParticles();
+                }
+                lastSpawnTime = currentTime;
+            }
+
+            // 3. Update and Draw Rockets and Particles
+            // Update Rockets
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const rocket = rockets[i];
+                rocket.particle.update();
+
+                // Explosion condition: rocket slows down (vy >= 0) and is high enough
+                const isApex = rocket.particle.vy >= 0;
+                const isHighEnough = rocket.particle.y < height * 0.75;
+                const isOldEnough = rocket.particle.remainingLife < 995; 
+
+                if (!rocket.exploded && isHighEnough && isApex && isOldEnough) {
+                    explodeRocket(rocket);
+                }
+
+                if (rocket.exploded || rocket.particle.y > height + 50) {
+                    rockets.splice(i, 1);
+                } else {
+                    rocket.particle.draw();
+                }
+            }
+
+            // Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+
+                if (p.remainingLife <= 0 || p.y > height + 50) {
+                    particles.splice(i, 1);
+                } else {
+                    p.draw();
+                }
+            }
+        }
+
+        // --- Setup and Event Listeners ---
+
+        function toggleRun() {
+            isRunning = !isRunning;
+            const button = document.getElementById('toggleRunButton');
+            
+            if (isRunning) {
+                button.textContent = 'Stop';
+                button.classList.remove('bg-green-600', 'hover:bg-green-700');
+                button.classList.add('bg-red-600', 'hover:bg-red-700');
+            } else {
+                button.textContent = 'Start';
+                button.classList.remove('bg-red-600', 'hover:bg-red-700');
+                button.classList.add('bg-green-600', 'hover:bg-green-700');
+            }
+        }
+
+        function init() {
+            setupCanvas();
+            animate(0); 
+        }
+
+        // --- UI Event Handlers ---
+
+        const rateSlider = document.getElementById('spawnRate');
+        const rateValue = document.getElementById('rateValue');
+        rateSlider.addEventListener('input', (e) => {
+            spawnRateNorm = parseInt(e.target.value);
+            rateValue.textContent = spawnRateNorm;
+        });
+
+        const sizeSlider = document.getElementById('explosionSize');
+        const sizeValue = document.getElementById('sizeValue');
+        sizeSlider.addEventListener('input', (e) => {
+            explosionSizeNorm = parseInt(e.target.value);
+            sizeValue.textContent = explosionSizeNorm;
+        });
+
+        const velocityControl = document.getElementById('velocityControl');
+        const velocityValue = document.getElementById('velocityValue');
+        velocityControl.addEventListener('input', (e) => {
+            velocityNorm = parseInt(e.target.value);
+            velocityValue.textContent = velocityNorm;
+        });
+        
+        const windControl = document.getElementById('windControl');
+        const windDisplay = document.getElementById('windDisplay');
+        windControl.addEventListener('input', (e) => {
+            windForce = parseFloat(e.target.value);
+            windDisplay.textContent = windForce.toFixed(2);
+        });
+        
+        const toggleRunButton = document.getElementById('toggleRunButton');
+        toggleRunButton.addEventListener('click', toggleRun);
+
+
+        const typeSelector = document.getElementById('fireworkType');
+        typeSelector.addEventListener('change', (e) => {
+            fireworkType = e.target.value;
+            // Clear current effects for a clean switch
+            particles = [];
+            rockets = [];
+        });
+
+        window.onload = init;
+    </script>
+
+</body>
+</html>

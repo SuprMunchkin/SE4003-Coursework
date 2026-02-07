@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Fireworks Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for canvas and body */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars due to full screen canvas */
+        }
+        #fireworksCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        .controls-container {
+            z-index: 20;
+            position: relative;
+            background-color: rgba(17, 24, 39, 0.8); /* Dark background with transparency */
+            backdrop-filter: blur(5px);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fcd34d;
+            cursor: pointer;
+            box-shadow: 0 0 5px #fcd34d;
+        }
+        /* Mobile layout adjustment */
+        @media (max-width: 768px) {
+            .controls-container {
+                padding: 10px;
+                flex-direction: column;
+            }
+            .control-group {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+    <canvas id="fireworksCanvas"></canvas>
+
+    <div class="controls-container p-4 flex justify-center items-center gap-6 rounded-b-xl shadow-2xl mx-auto max-w-4xl">
+        
+        <!-- Firework Type Selector -->
+        <div class="control-group flex flex-col items-center">
+            <label for="fireworkType" class="text-sm font-semibold mb-1 text-yellow-300">Style</label>
+            <select id="fireworkType" class="p-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:ring-yellow-500 focus:border-yellow-500 transition duration-150 ease-in-out">
+                <option value="rocket">Rocket Burst</option>
+                <option value="fountain">Ground Fountain</option>
+            </select>
+        </div>
+
+        <!-- Spawn Rate Control -->
+        <div class="control-group flex flex-col items-center w-1/3 max-w-xs">
+            <label for="spawnRate" class="text-sm font-semibold mb-2 text-yellow-300">Spawn Rate (<span id="rateValue">50</span>ms)</label>
+            <input type="range" id="spawnRate" min="10" max="500" value="50" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+        </div>
+
+        <!-- Explosion Size/Density Control -->
+        <div class="control-group flex flex-col items-center w-1/3 max-w-xs">
+            <label for="explosionSize" class="text-sm font-semibold mb-2 text-yellow-300">Size/Density (<span id="sizeValue">100</span> particles)</label>
+            <input type="range" id="explosionSize" min="20" max="300" value="100" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg">
+        </div>
+    </div>
+
+    <script>
+        // Global environment variables
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        const gravity = 0.05; // Force of gravity
+        let particles = [];
+        let rockets = [];
+        let lastSpawnTime = 0;
+
+        // UI Control Variables
+        let fireworkType = 'rocket'; // 'rocket' or 'fountain'
+        let spawnRate = 50; // Milliseconds between spawns/bursts
+        let explosionSize = 100; // Number of particles
+
+        // --- Utility Functions ---
+
+        /**
+         * Converts HSL color to a string format.
+         * @param {number} h Hue (0-360)
+         * @param {number} s Saturation (0-100)
+         * @param {number} l Lightness (0-100)
+         * @returns {string} HSL color string.
+         */
+        function HSLToCSS(h, s, l) {
+            return `hsl(${h}, ${s}%, ${l}%)`;
+        }
+
+        /**
+         * Sets up the canvas size to match the window and adds a resize listener.
+         */
+        function setupCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', setupCanvas);
+
+        // --- Particle Class ---
+
+        class Particle {
+            /**
+             * Represents a single spark in the fireworks display.
+             * @param {number} x X position
+             * @param {number} y Y position
+             * @param {number} vx Velocity X
+             * @param {number} vy Velocity Y
+             * @param {number} hue Color hue
+             * @param {number} life Decay rate (higher means faster decay)
+             * @param {number} size Radius
+             * @param {boolean} isRocket If true, particle is the main rocket (draws a trail).
+             */
+            constructor(x, y, vx, vy, hue, life, size, isRocket = false) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.hue = hue;
+                this.alpha = 1;
+                this.life = life || (Math.random() * 100) + 100;
+                this.remainingLife = this.life;
+                this.size = size || 3;
+                this.isRocket = isRocket;
+                this.history = []; // Trail history
+            }
+
+            /**
+             * Updates particle position and state based on physics.
+             */
+            update() {
+                this.remainingLife--;
+
+                // Apply gravity
+                this.vy += gravity;
+                // Apply drag (air resistance)
+                this.vx *= 0.995;
+                this.vy *= 0.995;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Update alpha based on remaining life
+                this.alpha = this.remainingLife / this.life;
+
+                // Rocket trail logic
+                if (this.isRocket) {
+                    this.history.push({ x: this.x, y: this.y });
+                    if (this.history.length > 5) {
+                        this.history.shift(); // Keep trail history short
+                    }
+                }
+            }
+
+            /**
+             * Draws the particle and its trail (if it's a rocket).
+             */
+            draw() {
+                const color = HSLToCSS(this.hue, 100, 50);
+
+                // Draw main particle
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * this.alpha, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.fill();
+
+                // Draw the fading color glow
+                ctx.save();
+                ctx.globalAlpha = this.alpha * 0.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 2, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.restore();
+
+                // Draw the rocket trail
+                if (this.isRocket && this.history.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.history[0].x, this.history[0].y);
+                    for (let i = 1; i < this.history.length; i++) {
+                        ctx.lineTo(this.history[i].x, this.history[i].y);
+                    }
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // --- Firework Logic ---
+
+        /**
+         * Creates a single rocket that shoots up and explodes.
+         */
+        function launchRocket() {
+            // Random start position (centered at bottom)
+            const startX = width / 2 + (Math.random() - 0.5) * 100;
+            const startY = height;
+            // High initial vertical velocity
+            const startVY = -(Math.random() * 5 + 8);
+            // Small horizontal variation
+            const startVX = (Math.random() - 0.5) * 0.5;
+            // Random color for the firework
+            const hue = Math.floor(Math.random() * 360);
+
+            // Create the rocket particle
+            const rocket = new Particle(startX, startY, startVX, startVY, hue, 1000, 4, true);
+
+            // Rocket object stores the particle and explosion logic
+            rockets.push({
+                particle: rocket,
+                exploded: false,
+                explosionHue: hue,
+                explosionSize: explosionSize
+            });
+        }
+
+        /**
+         * Explodes a single rocket into many sparks.
+         * @param {object} rocket The rocket object that is exploding.
+         */
+        function explodeRocket(rocket) {
+            rocket.exploded = true;
+            const numParticles = rocket.explosionSize;
+            const hue = rocket.explosionHue;
+            const explosionPower = 4; // Velocity scale for sparks
+
+            for (let i = 0; i < numParticles; i++) {
+                // Random angle and speed
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * explosionPower + 1;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+                const life = (Math.random() * 50) + 150;
+                const size = Math.random() * 2 + 1;
+
+                particles.push(new Particle(
+                    rocket.particle.x,
+                    rocket.particle.y,
+                    vx,
+                    vy,
+                    hue + (Math.random() * 40 - 20), // Slight hue shift for visual interest
+                    life,
+                    size,
+                    false
+                ));
+            }
+        }
+
+        /**
+         * Creates a ground-based fountain effect.
+         */
+        function spawnFountainParticles() {
+            const numParticles = Math.floor(explosionSize / 10); // Use size for density/intensity
+            const startX = width / 2;
+            const startY = height;
+            const hue = Math.floor(Math.random() * 360);
+
+            for (let i = 0; i < numParticles; i++) {
+                // Initial upward velocity is high, horizontal is small
+                const startVY = -(Math.random() * 3 + 4) * (explosionSize / 300); // Scale height with size
+                const startVX = (Math.random() - 0.5) * 2;
+                const life = (Math.random() * 50) + 70; // Short lifespan for quick decay
+                const size = Math.random() * 1.5 + 0.5;
+
+                particles.push(new Particle(
+                    startX + (Math.random() - 0.5) * 10, // Slight horizontal spread
+                    startY,
+                    startVX,
+                    startVY,
+                    hue,
+                    life,
+                    size,
+                    false
+                ));
+            }
+        }
+
+
+        // --- Main Animation Loop ---
+
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            // 1. Clear the canvas (with slight fade for trail effect)
+            ctx.fillStyle = 'rgba(10, 10, 20, 0.1)'; // Dark blue/black background
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. Handle Spawning (Throttle based on spawnRate)
+            if (currentTime - lastSpawnTime > spawnRate) {
+                if (fireworkType === 'rocket') {
+                    launchRocket();
+                } else if (fireworkType === 'fountain') {
+                    spawnFountainParticles();
+                }
+                lastSpawnTime = currentTime;
+            }
+
+            // 3. Update and Draw Rockets
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const rocket = rockets[i];
+                rocket.particle.update();
+
+                // Check for explosion condition: rocket slows down (vy >= 0) or hits max height
+                // The particle must also be high enough (e.g., above 3/4 of the screen)
+                const isApex = rocket.particle.vy >= 0;
+                const isHighEnough = rocket.particle.y < height * 0.75;
+                const isOldEnough = rocket.particle.remainingLife < 995; // Wait a moment before checking
+
+                if (!rocket.exploded && isHighEnough && isApex && isOldEnough) {
+                    explodeRocket(rocket);
+                }
+
+                // Remove rocket once it has exploded and its particle has decayed
+                if (rocket.exploded || rocket.particle.y > height + 50) {
+                    rockets.splice(i, 1);
+                } else {
+                    rocket.particle.draw();
+                }
+            }
+
+
+            // 4. Update and Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+
+                // Remove dead particles (life spent or fell off screen)
+                if (p.remainingLife <= 0 || p.y > height + 50) {
+                    particles.splice(i, 1);
+                } else {
+                    p.draw();
+                }
+            }
+        }
+
+        // --- Setup and Event Listeners ---
+
+        function init() {
+            setupCanvas();
+            animate(0); // Start the animation loop
+        }
+
+        // UI Event Handlers
+        const rateSlider = document.getElementById('spawnRate');
+        const rateValue = document.getElementById('rateValue');
+        rateSlider.addEventListener('input', (e) => {
+            spawnRate = parseInt(e.target.value);
+            rateValue.textContent = spawnRate;
+        });
+
+        const sizeSlider = document.getElementById('explosionSize');
+        const sizeValue = document.getElementById('sizeValue');
+        sizeSlider.addEventListener('input', (e) => {
+            explosionSize = parseInt(e.target.value);
+            sizeValue.textContent = explosionSize;
+            // Update the label text based on type
+            const label = document.querySelector('label[for="explosionSize"]');
+            label.innerHTML = `${fireworkType === 'rocket' ? 'Size' : 'Density'} (<span id="sizeValue">${explosionSize}</span> particles)`;
+        });
+
+        const typeSelector = document.getElementById('fireworkType');
+        typeSelector.addEventListener('change', (e) => {
+            fireworkType = e.target.value;
+            // Reset particles/rockets for a clean switch
+            particles = [];
+            rockets = [];
+
+            // Update label based on selected type
+            const label = document.querySelector('label[for="explosionSize"]');
+            label.innerHTML = `${fireworkType === 'rocket' ? 'Size' : 'Density'} (<span id="sizeValue">${explosionSize}</span> particles)`;
+
+            // Update range max/min for better feel
+            if (fireworkType === 'rocket') {
+                sizeSlider.min = 50;
+                sizeSlider.max = 300;
+                sizeSlider.value = explosionSize > 300 ? 300 : explosionSize; // Clamp if necessary
+                rateSlider.min = 50;
+                rateSlider.max = 500;
+                rateSlider.value = spawnRate < 50 ? 50 : spawnRate;
+            } else { // Fountain
+                sizeSlider.min = 20;
+                sizeSlider.max = 150; // Max density is lower
+                sizeSlider.value = explosionSize > 150 ? 150 : explosionSize;
+                rateSlider.min = 10;
+                rateSlider.max = 100; // Faster burst rate for fountain
+                rateSlider.value = spawnRate > 100 ? 100 : spawnRate;
+            }
+            explosionSize = parseInt(sizeSlider.value);
+            spawnRate = parseInt(rateSlider.value);
+            rateValue.textContent = spawnRate;
+            sizeValue.textContent = explosionSize;
+        });
+
+        // Start the engine
+        window.onload = init;
+    </script>
+
+</body>
+</html>
